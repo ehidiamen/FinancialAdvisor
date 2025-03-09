@@ -54,32 +54,40 @@ class PineconeNewsManager:
         conn.close()
 
     def store_news(self, stock, source, title, link, content):
-        """Stores news articles in SQLite and Pinecone."""
+        """Stores news articles in SQLite and Pinecone with timestamps."""
         print("Storing content on: " + stock + ", Content: \n")
         print(content)
+
         conn = sqlite3.connect(self.db)
         cursor = conn.cursor()
 
-        # ✅ Check for duplicates before inserting
+        # Check for duplicates before inserting
         cursor.execute("SELECT COUNT(*) FROM news WHERE link = ?", (link,))
         if cursor.fetchone()[0] > 0:
             print(f"⚠️ Skipping duplicate news article: {title}")
             return
 
-        cursor.execute("INSERT INTO news (stock, source, title, link, content) VALUES (?, ?, ?, ?, ?)",
-                       (stock, source, title, link, content))
+        # Get current timestamp
+        timestamp = datetime.now().isoformat()
+
+        # Store in SQLite with timestamp
+        cursor.execute(
+            "INSERT INTO news (stock, source, title, link, content, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+            (stock, source, title, link, content, timestamp)
+        )
         conn.commit()
         conn.close()
 
-        # ✅ Store embeddings in Pinecone
+        # Store embeddings in Pinecone with metadata
         chunks = text_splitter.split_text(content)
         pinecone_vectors = [
-            (f"{title}_{i}", embedding_model.embed_query(chunk), {"content": chunk, "stock": stock})
+            (f"{title}_{i}", embedding_model.embed_query(chunk), 
+             {"content": chunk, "stock": stock, "timestamp": timestamp})  # ✅ Store timestamp in Pinecone metadata
             for i, chunk in enumerate(chunks)
         ]
         index.upsert(pinecone_vectors)
-        print(f"✅ Stored {len(chunks)} chunks for: {title}")
-
+        print(f"✅ Stored {len(chunks)} chunks for: {title} at {timestamp}")
+        
     def retrieve_news(self, stock, limit=5):
         """Fetches news from SQLite and Pinecone, returning the most relevant results."""
         retrieved_news = []
@@ -150,7 +158,7 @@ class PineconeNewsManager:
 
     def schedule_scraping(self):
         """Schedules scraping every 6 hours."""
-        schedule.every(3).minutes.do(lambda: (self.scraper.collect_data(), self.delete_old_news()))
+        schedule.every(3).minutes.do(lambda: (self.scraper.collect_data()))
 
         print("⏳ Scraper and old news deletion scheduled every 6 hours.")
         while True:
