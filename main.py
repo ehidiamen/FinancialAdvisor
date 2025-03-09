@@ -9,6 +9,8 @@ import threading
 
 from dotenv import load_dotenv
 
+from scraper import Scraper
+
 load_dotenv()
 
 # Initialize Firebase
@@ -39,7 +41,8 @@ llm = ChatGroq(
 
 # ✅ Initialize PineconeNewsManager
 news_manager = PineconeNewsManager()
-threading.Thread(target=news_manager.schedule_scraping, daemon=True).start()
+scraper = Scraper(news_manager)
+threading.Thread(target=scraper.schedule_scraping, daemon=True).start()
 # news_manager.schedule_scraping() 
 
 # ✅ Stocks to Check in User Queries
